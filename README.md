@@ -1,44 +1,32 @@
 ```markdown
-<div align="center">
-  
-# 🔍 Non-LLM Misinformation Verifier
-  
-*An offline, deterministic NLP pipeline that verifies real-time news claims using classical NLP, sentence cross-encoders, and Natural Language Inference (NLI)—**completely free of Generative LLMs**.*
+Non-LLM Misinformation Verifier
 
-[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Maintained](https://img.shields.io/badge/Maintained%3F-yes-brightgreen.svg)]()
+An offline, deterministic NLP pipeline that verifies real-time news claims using classical NLP, sentence cross-encoders, and Natural Language Inference (NLI)—completely free of Generative LLMs.
 
-</div>
 
-<br />
+Table of Contents
+- Why Build This Without an LLM?
+- Architecture & Pipeline
+- Key Technical Features
+- How It Works
+- Example Outputs
+- Tech Stack
+- Contributing
+- License
 
-## 📖 Table of Contents
-- [Why Build This Without an LLM?](#-why-build-this-without-an-llm)
-- [Architecture & Pipeline](#️-architecture--pipeline)
-- [Key Technical Features](#-key-technical-features)
-- [Quickstart](#-quickstart)
-- [Example Outputs](#-example-outputs)
-- [Tech Stack](#-tech-stack)
-- [Contributing](#-contributing)
-- [License](#-license)
 
----
-
-## 💡 Why Build This Without an LLM?
+Why Build This Without an LLM?
 
 Large Language Models (LLMs) are great for creative writing, but they come with real drawbacks for automated fact-checking:
-* **Hallucinations:** Generative models can confidently invent facts or fabricate sources.
-* **Latency & Cost:** Calling commercial APIs for simple stance detection is slow and expensive.
-* **Non-Deterministic:** The same prompt can yield different verdicts on different runs.
+* Hallucinations: Generative models can confidently invent facts or fabricate sources.
+* Latency & Cost: Calling commercial APIs for simple stance detection is slow and expensive.
+* Non-Deterministic: The same prompt can yield different verdicts on different runs.
 
-This project proves you can build an accurate, real-time misinformation verifier using lightweight classification models, dependency parsing, and semantic search. **If there's no evidence in the news, it simply tells you—it will never invent a story.**
+This project proves you can build an accurate, real-time misinformation verifier using lightweight classification models, dependency parsing, and semantic search. If there's no evidence in the news, it simply tells you—it will never invent a story.
 
----
 
-## 🛠️ Architecture & Pipeline
+Architecture & Pipeline
 
-```text
   [ User Claim ]
         │
         ├──► 1. spaCy Dependency Parsing (Isolate core grammatical subject)
@@ -51,61 +39,47 @@ This project proves you can build an accurate, real-time misinformation verifier
   [ Subject Guardrail ] ──► Discards sentences that don't explicitly mention the claim's subject
         │
         ▼
-  [ Cross-Encoder Ranking ] ──► `ms-marco-MiniLM` ranks sentences by factual relevance
+  [ Cross-Encoder Ranking ] ──► ms-marco-MiniLM ranks sentences by factual relevance
         │
         ▼
   [ Speculation Intercept ] ──► Detects journalistic hedging ("wants", "reportedly", "rumor")
         │                        └──► Flags premature claims as MISINFORMATION
         ▼
-  [ RoBERTa NLI Stance ] ──► `roberta-large-mnli` classifies entailment vs. contradiction
+  [ RoBERTa NLI Stance ] ──► roberta-large-mnli classifies entailment vs. contradiction
         │
         ▼
   [ Final Verdict ]
 
-```
 
----
+Key Technical Features
 
-## ✨ Key Technical Features
+* Grammatical Subject Guardrail: Uses spaCy dependency parsing (nsubj) to ensure candidate sentences strictly contain the claim's subject. This prevents semantic search models from making "desperate matches" (e.g., substituting "vaping" for "smoking").
+* Cross-Encoder Fact Retrieval: Replaces traditional vector-similarity search (SBERT) with an MS-MARCO Cross-Encoder. This guarantees candidate sentences actually answer or resolve the claim rather than just sharing similar words.
+* Journalistic Speculation Filter: Intercepts claims before stance detection. If a user states something as a completed fact (e.g., "Player X transferred to Club Y"), but the news only reports on rumors or intent ("Player X wants to move"), the pipeline flags it as Premature Misinformation.
+* Synonym-Aware Query Expansion: Combines proper nouns and verbs with WordNet synonyms to run multi-pass news searches, overcoming vocabulary mismatches across news outlets.
 
-* **Grammatical Subject Guardrail:** Uses `spaCy` dependency parsing (`nsubj`) to ensure candidate sentences strictly contain the claim's subject. This prevents semantic search models from making "desperate matches" (e.g., substituting "vaping" for "smoking").
-* **Cross-Encoder Fact Retrieval:** Replaces traditional vector-similarity search (SBERT) with an MS-MARCO Cross-Encoder. This guarantees candidate sentences actually *answer* or *resolve* the claim rather than just sharing similar words.
-* **Journalistic Speculation Filter:** Intercepts claims before stance detection. If a user states something as a completed fact (e.g., *"Player X transferred to Club Y"*), but the news only reports on rumors or intent (*"Player X wants to move"*), the pipeline flags it as **Premature Misinformation**.
-* **Synonym-Aware Query Expansion:** Combines proper nouns and verbs with WordNet synonyms to run multi-pass news searches, overcoming vocabulary mismatches across news outlets.
 
----
+How It Works
 
-## 🚀 Quickstart
+The system converts input claims into verified outcomes through a four-stage process:
 
-### 1. Prerequisites & Installation
+1. Syntactic Parsing & Query Expansion
+   The user inputs a claim. spaCy parses the sentence structure to identify the root verb and core grammatical subject (nsubj). NLTK WordNet extracts direct synonyms for these key terms to construct multiple distinct search queries.
 
-Clone the repository and install the required NLP libraries:
+2. Real-Time Retrieval & Filtering
+   The generated queries are dispatched to Google News to pull candidate news headlines and descriptions. The Subject Guardrail immediately evaluates all gathered text, discarding any sentence that does not contain the target subject or its synonyms.
 
-```bash
-git clone [https://github.com/your-username/misinformation-verifier.git](https://github.com/your-username/misinformation-verifier.git)
-cd misinformation-verifier
+3. Cross-Encoder Fact Ranking
+   Remaining sentences are paired directly with the claim and scored using a Cross-Encoder model (ms-marco-MiniLM). The Cross-Encoder computes full cross-attention between the claim and candidate sentences to surface the exact sentence containing the factual resolution.
 
-pip install spacy nltk gnews sentence-transformers transformers torch
-python -m spacy download en_core_web_sm
+4. Speculation Check & NLI Classification
+   The selected best-matching sentence passes through a Speculation Filter to catch hedge words (such as "wants", "reportedly", or "rumor"). If speculation is detected on a factual assertion, the system flags it as premature misinformation. Otherwise, the pair is evaluated by a RoBERTa Natural Language Inference model (roberta-large-mnli) to output a final verdict of Verified, Misinformation, or Unverified based on strict logical entailment.
 
-```
 
-### 2. Run the Verifier
+Example Outputs
 
-Launch the interactive CLI:
+Case 1: Caught Speculation / Unconfirmed Transfer
 
-```bash
-python verifier.py
-
-```
-
----
-
-## 🧪 Example Outputs
-
-### Case 1: Caught Speculation / Unconfirmed Transfer
-
-```text
 CLAIM TO VERIFY: "olise moves to real madrid"
 ======================================================================
 Executing search across 8 query variations...
@@ -121,11 +95,9 @@ ARTICLES COMPARED: 20
 BEST EVIDENCE:     "Michael Olise wants to move to Real Madrid - Yahoo Sports"
 ======================================================================
 
-```
 
-### Case 2: Subject Guardrail in Action
+Case 2: Subject Guardrail in Action
 
-```text
 CLAIM TO VERIFY: "smoking causes cancer"
 ======================================================================
 Executing search across 8 query variations...
@@ -142,32 +114,26 @@ ARTICLES COMPARED: 20
 BEST EVIDENCE:     "Cigarette smoking causes roughly 85% of all lung cancer cases."
 ======================================================================
 
-```
 
----
+Tech Stack
 
-## 📦 Tech Stack
+Component                      Library / Model                  Purpose
+Parsing & Syntactic Rules      spaCy (en_core_web_sm)          POS tagging, dependency parsing (nsubj), entity isolation
+Synonym Expansion              NLTK (wordnet)                   Generating query variations for news search
+News Retrieval                 gnews                            Real-time article headline and snippet aggregation
+Fact Ranking                   sentence-transformers            Cross-Encoder for sentence relevance scoring
+                               (ms-marco-MiniLM-L-6-v2)
+Stance Classification          transformers                     NLI logical entailment vs. contradiction evaluation
+                               (FacebookAI/roberta-large-mnli)
 
-| Component | Library / Model | Purpose |
-| --- | --- | --- |
-| **Parsing & Syntactic Rules** | `spaCy` (`en_core_web_sm`) | POS tagging, dependency parsing (`nsubj`), entity isolation |
-| **Synonym Expansion** | `NLTK` (`wordnet`) | Generating query variations for news search |
-| **News Retrieval** | `gnews` | Real-time article headline and snippet aggregation |
-| **Fact Ranking** | `sentence-transformers` (`ms-marco-MiniLM-L-6-v2`) | Cross-Encoder for sentence relevance scoring |
-| **Stance Classification** | `transformers` (`FacebookAI/roberta-large-mnli`) | NLI logical entailment vs. contradiction evaluation |
 
----
-
-## 🤝 Contributing
+Contributing
 
 Pull requests are warmly welcome. If you'd like to improve news scraping capabilities (e.g., full-text scraping via BeautifulSoup) or extend the hedge word dictionary for different domains (politics, finance), please fork the repository and open a pull request.
 
----
 
-## 📜 License
+License
 
-Distributed under the MIT License. See `LICENSE` for details.
-
-```
+Distributed under the MIT License. See LICENSE for details.
 
 ```
