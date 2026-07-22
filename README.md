@@ -1,7 +1,7 @@
 ```markdown
 Non-LLM Misinformation Verifier
 
-An offline, deterministic NLP pipeline that verifies real-time news claims using classical NLP, sentence cross-encoders, and Natural Language Inference (NLI)—completely free of Generative LLMs.
+An deterministic NLP pipeline that verifies real-time news claims using classical NLP, sentence cross-encoders, and Natural Language Inference (NLI)—completely free of Generative LLMs.
 
 
 Table of Contents
@@ -126,14 +126,5 @@ Fact Ranking                   sentence-transformers            Cross-Encoder fo
 Stance Classification          transformers                     NLI logical entailment vs. contradiction evaluation
                                (FacebookAI/roberta-large-mnli)
 
-
-Contributing
-
-Pull requests are warmly welcome. If you'd like to improve news scraping capabilities (e.g., full-text scraping via BeautifulSoup) or extend the hedge word dictionary for different domains (politics, finance), please fork the repository and open a pull request.
-
-
-License
-
-Distributed under the MIT License. See LICENSE for details.
 
 ```
